@@ -59,3 +59,13 @@ div.stButton > button:hover {
     transform: translateY(-3px) scale(1.03);
     box-shadow: 0 6px 14px rgba(0,0,0,0.25);
 }
+
+/* Seragamkan tombol di galeri */
+[data-testid="column"] div.stButton > button, 
+[data-testid="column"] div.stDownloadButton > button {
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+}

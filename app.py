@@ -16,20 +16,14 @@ BG_PATH = os.path.join(DIR, "image/bg.jpg")
 if not os.path.exists(GALLERY_DIR): os.makedirs(GALLERY_DIR)
 
 def load_css(file, bg_img=None):
-    if not os.path.exists(file):
-        st.error(f"File CSS tidak ditemukan: {file}")
-        return
-        
-    with open(file, "r") as f:
-        css = f.read()
-    
+    if not os.path.exists(file): return
+    with open(file, "r") as f: css = f.read()
     if bg_img and os.path.exists(bg_img):
         with open(bg_img, "rb") as img:
             b64 = base64.b64encode(img.read()).decode()
         css = css.replace("BG_IMAGE", b64)
     else:
         css = css.replace("BG_IMAGE", "")
-        
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 if "page" not in st.session_state: st.session_state.page = "start"
@@ -37,9 +31,9 @@ if "drawing_mode" not in st.session_state: st.session_state.drawing_mode = "free
 if "stroke_width" not in st.session_state: st.session_state.stroke_width = 5
 if "stroke_color" not in st.session_state: st.session_state.stroke_color = "#000000"
 if "fill_active" not in st.session_state: st.session_state.fill_active = False
-if "canvas_key" not in st.session_state: st.session_state.canvas_key = "canvas_fixed"
 if "canvas_data" not in st.session_state: 
     st.session_state.canvas_data = np.full((500, 800, 4), 255, dtype=np.uint8)
+if "canvas_key" not in st.session_state: st.session_state.canvas_key = "canvas_fixed"
 
 def apply_transform(transform_type):
     img = Image.fromarray(st.session_state.canvas_data.astype(np.uint8)).convert("RGBA")
@@ -74,7 +68,6 @@ def render_home_page():
             target = c1 if i % 2 == 0 else c2
             if target.button(label, key=f"tool_{mode}", use_container_width=True):
                 st.session_state.drawing_mode = mode
-                st.rerun()
         st.divider()
         st.session_state.stroke_color = st.color_picker("Warna Utama", st.session_state.stroke_color)
         st.session_state.fill_active = st.checkbox("Gunakan Warna Isi (Fill)", value=st.session_state.fill_active)
@@ -82,20 +75,19 @@ def render_home_page():
         st.divider()
         st.markdown("#### Transformasi")
         t1, t2, t3 = st.columns(3)
-        if t1.button("🔄 Rot", use_container_width=True): 
-            apply_transform("rot"); st.rerun()
-        if t2.button("↔️ Flip H", use_container_width=True): 
-            apply_transform("flip_h"); st.rerun()
-        if t3.button("↕️ Flip V", use_container_width=True): 
-            apply_transform("flip_v"); st.rerun()
+        if t1.button("🔄 Rot", use_container_width=True): apply_transform("rot")
+        if t2.button("↔️ Flip H", use_container_width=True): apply_transform("flip_h")
+        if t3.button("↕️ Flip V", use_container_width=True): apply_transform("flip_v")
 
     with col_canvas:
         canvas_result = st_canvas(
             fill_color=st.session_state.stroke_color if st.session_state.fill_active else "rgba(0,0,0,0)",
-            stroke_width=st.session_state.stroke_width,
+            stroke_width=st.session_state.stroke_width, 
             stroke_color=st.session_state.stroke_color,
-            height=500, width=800,
-            drawing_mode=st.session_state.drawing_mode,
+            background_image=Image.fromarray(st.session_state.canvas_data.astype(np.uint8)),
+            height=500, 
+            width=800, 
+            drawing_mode=st.session_state.drawing_mode, 
             key=st.session_state.canvas_key
         )
         if canvas_result.image_data is not None:
@@ -106,10 +98,8 @@ def render_home_page():
             img = Image.fromarray(st.session_state.canvas_data.astype(np.uint8))
             img.save(os.path.join(GALLERY_DIR, f"Karya_{int(time.time())}.png"))
             st.toast("Tersimpan!")
-        if c_gal.button("🖼️ Galeri", use_container_width=True): 
-            st.session_state.page = "gallery"; st.rerun()
-        if c_home.button("🏠 Home", use_container_width=True): 
-            st.session_state.page = "start"; st.rerun()
+        if c_gal.button("🖼️ Galeri", use_container_width=True): st.session_state.page = "gallery"; st.rerun()
+        if c_home.button("🏠 Home", use_container_width=True): st.session_state.page = "start"; st.rerun()
 
 def render_gallery_page():
     load_css(CSS_PATH, BG_PATH)
@@ -120,12 +110,31 @@ def render_gallery_page():
     else:
         cols = st.columns(5)
         for i, file in enumerate(files):
+            img_path = os.path.join(GALLERY_DIR, file)
             with cols[i % 5]:
-                st.image(os.path.join(GALLERY_DIR, file), use_container_width=True)
-                st.caption(file.replace(".png", ""))
-    if st.button("⬅️ Kembali ke Editor"):
+                st.image(img_path, use_container_width=True)
+                b1, b2, b3 = st.columns(3)
+                with open(img_path, "rb") as f:
+                    b1.download_button("⬇️", f, file_name=file, key=f"dl_{i}", use_container_width=True)
+                if b2.button("👀", key=f"view_{i}", use_container_width=True):
+                    st.session_state.preview_img = img_path
+                    st.session_state.page = "preview"
+                    st.rerun()
+                if b3.button("🗑️", key=f"del_{i}", use_container_width=True):
+                    os.remove(img_path)
+                    st.rerun()
+    st.divider()
+    if st.button("⬅️ Kembali ke Editor", use_container_width=True):
         st.session_state.page = "home"; st.rerun()
+
+def render_preview_page():
+    load_css(CSS_PATH, BG_PATH)
+    st.image(st.session_state.preview_img, use_container_width=True)
+    if st.button("⬅️ Kembali ke Galeri", use_container_width=True):
+        st.session_state.page = "gallery"
+        st.rerun()
 
 if st.session_state.page == "start": render_start_page()
 elif st.session_state.page == "home": render_home_page()
 elif st.session_state.page == "gallery": render_gallery_page()
+elif st.session_state.page == "preview": render_preview_page()
