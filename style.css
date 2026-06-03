@@ -1,11 +1,3 @@
-/* Background */
-[data-testid="stAppViewContainer"] {
-    background-image: url("data:image/png;base64,BG_IMAGE");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-}
-
 /* Card */
 .block-container:has(.card-flag) {
     background-color: white;
