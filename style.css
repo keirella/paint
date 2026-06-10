@@ -69,3 +69,40 @@ div.stButton > button:hover {
     display: flex !important;
     justify-content: center !important;
 }
+
+.animation-stage {
+    width: 100%;
+    height: 480px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, rgba(255, 248, 220, 0.95), rgba(211, 244, 255, 0.95));
+    border: 3px solid #FFDE63;
+}
+
+.animated-artwork {
+    position: absolute;
+    width: 260px;
+    max-height: 260px;
+    object-fit: contain;
+    top: 110px;
+    left: 40px;
+    animation: artworkMotion 5s ease-in-out infinite alternate;
+    transform-origin: center center;
+    filter: drop-shadow(0 16px 22px rgba(0,0,0,0.25));
+}
+
+@keyframes artworkMotion {
+    0% {
+        left: 40px;
+        transform: translateY(0) rotate(0deg) scale(0.85);
+    }
+    50% {
+        transform: translateY(-45px) rotate(180deg) scale(1.15);
+    }
+    100% {
+        left: calc(100% - 300px);
+        transform: translateY(55px) rotate(360deg) scale(0.95);
+    }
+}

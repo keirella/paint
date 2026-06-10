@@ -5,6 +5,7 @@ import time
 import numpy as np
 from PIL import Image
 import base64
+import io
 
 st.set_page_config(page_title="Web Paint", page_icon="🎨", layout="wide")
 
@@ -34,6 +35,26 @@ if "fill_active" not in st.session_state: st.session_state.fill_active = False
 if "canvas_data" not in st.session_state: 
     st.session_state.canvas_data = np.full((500, 800, 4), 255, dtype=np.uint8)
 if "canvas_key" not in st.session_state: st.session_state.canvas_key = "canvas_fixed"
+if "skip_canvas_update" not in st.session_state: st.session_state.skip_canvas_update = False
+
+def layer_has_drawing(layer):
+    return layer is not None and np.any(layer[:, :, 3] > 0)
+
+def image_data_url(image_data):
+    img = Image.fromarray(image_data.astype(np.uint8)).convert("RGBA")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode()
+
+def commit_canvas_layer(layer):
+    if not layer_has_drawing(layer):
+        return False
+    base = Image.fromarray(st.session_state.canvas_data.astype(np.uint8)).convert("RGBA")
+    overlay = Image.fromarray(layer.astype(np.uint8)).convert("RGBA")
+    st.session_state.canvas_data = np.array(Image.alpha_composite(base, overlay))
+    st.session_state.canvas_key = str(time.time())
+    st.session_state.skip_canvas_update = True
+    return True
 
 def apply_transform(transform_type):
     img = Image.fromarray(st.session_state.canvas_data.astype(np.uint8)).convert("RGBA")
@@ -45,6 +66,7 @@ def apply_transform(transform_type):
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
     st.session_state.canvas_data = np.array(img)
     st.session_state.canvas_key = str(time.time())
+    st.session_state.skip_canvas_update = True
 
 def render_start_page():
     load_css(CSS_PATH, BG_PATH)
@@ -59,6 +81,8 @@ def render_start_page():
 def render_home_page():
     load_css(CSS_PATH, BG_PATH)
     st.markdown("<div class='card-flag card-editor'></div>", unsafe_allow_html=True)
+    requested_transform = None
+    requested_action = None
     col_tools, col_canvas = st.columns([1, 3])
     with col_tools:
         st.markdown("### 🛠️ Editor")
@@ -75,9 +99,10 @@ def render_home_page():
         st.divider()
         st.markdown("#### Transformasi")
         t1, t2, t3 = st.columns(3)
-        if t1.button("🔄 Rot", use_container_width=True): apply_transform("rot")
-        if t2.button("↔️ Flip H", use_container_width=True): apply_transform("flip_h")
-        if t3.button("↕️ Flip V", use_container_width=True): apply_transform("flip_v")
+        if t1.button("🔄 Rot", use_container_width=True): requested_transform = "rot"
+        if t2.button("↔️ Flip H", use_container_width=True): requested_transform = "flip_h"
+        if t3.button("↕️ Flip V", use_container_width=True): requested_transform = "flip_v"
+        if st.button("▶️ Animasi", use_container_width=True): requested_action = "animation"
 
     with col_canvas:
         canvas_result = st_canvas(
@@ -90,15 +115,26 @@ def render_home_page():
             drawing_mode=st.session_state.drawing_mode, 
             key=st.session_state.canvas_key
         )
-        if canvas_result.image_data is not None:
-            st.session_state.canvas_data = canvas_result.image_data
+        if st.session_state.skip_canvas_update:
+            st.session_state.skip_canvas_update = False
+        if requested_transform:
+            commit_canvas_layer(canvas_result.image_data)
+            apply_transform(requested_transform)
+            st.rerun()
+        if requested_action == "animation":
+            commit_canvas_layer(canvas_result.image_data)
+            st.session_state.page = "animation"
+            st.rerun()
         st.divider()
         c_save, c_gal, c_home = st.columns(3)
         if c_save.button("💾 Simpan Gambar", use_container_width=True):
+            commit_canvas_layer(canvas_result.image_data)
             img = Image.fromarray(st.session_state.canvas_data.astype(np.uint8))
             img.save(os.path.join(GALLERY_DIR, f"Karya_{int(time.time())}.png"))
             st.toast("Tersimpan!")
-        if c_gal.button("🖼️ Galeri", use_container_width=True): st.session_state.page = "gallery"; st.rerun()
+        if c_gal.button("🖼️ Galeri", use_container_width=True):
+            commit_canvas_layer(canvas_result.image_data)
+            st.session_state.page = "gallery"; st.rerun()
         if c_home.button("🏠 Home", use_container_width=True): st.session_state.page = "start"; st.rerun()
 
 def render_gallery_page():
@@ -112,7 +148,7 @@ def render_gallery_page():
         for i, file in enumerate(files):
             img_path = os.path.join(GALLERY_DIR, file)
             with cols[i % 5]:
-                st.image(img_path, use_container_width=True)
+                st.image(img_path, use_column_width=True)
                 b1, b2, b3 = st.columns(3)
                 with open(img_path, "rb") as f:
                     b1.download_button("⬇️", f, file_name=file, key=f"dl_{i}", use_container_width=True)
@@ -129,8 +165,30 @@ def render_gallery_page():
 
 def render_preview_page():
     load_css(CSS_PATH, BG_PATH)
-    st.image(st.session_state.preview_img, use_container_width=True)
-    if st.button("⬅️ Kembali ke Galeri", use_container_width=True):
+    _, preview_col, _ = st.columns([1, 2, 1])
+    with preview_col:
+        st.image(st.session_state.preview_img, use_column_width=True)
+        if st.button("⬅️ Kembali ke Galeri", use_container_width=True):
+            st.session_state.page = "gallery"
+            st.rerun()
+
+def render_animation_page():
+    load_css(CSS_PATH, BG_PATH)
+    st.markdown("<div class='card-flag card-editor'></div>", unsafe_allow_html=True)
+    b64 = image_data_url(st.session_state.canvas_data)
+    st.markdown(
+        f"""
+        <div class="animation-stage">
+            <img class="animated-artwork" src="data:image/png;base64,{b64}" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    a1, a2 = st.columns(2)
+    if a1.button("⬅️ Kembali ke Editor", use_container_width=True):
+        st.session_state.page = "home"
+        st.rerun()
+    if a2.button("🖼️ Galeri", use_container_width=True):
         st.session_state.page = "gallery"
         st.rerun()
 
@@ -138,3 +196,4 @@ if st.session_state.page == "start": render_start_page()
 elif st.session_state.page == "home": render_home_page()
 elif st.session_state.page == "gallery": render_gallery_page()
 elif st.session_state.page == "preview": render_preview_page()
+elif st.session_state.page == "animation": render_animation_page()
